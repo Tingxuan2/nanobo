@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "photon_opt"
+version = "0.1.0"
+description = "Modular metasurface inverse design & Bayesian optimization framework"
+authors = [
+    { name = "Tingxuan" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+    "torch>=2.0.0",
+    "botorch>=0.9.0",
+    "gpytorch>=1.10",
+    "pytest>=7.0.0",
+    "tensorboard>=2.10.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["photon_opt*"]
+exclude = ["tests*"]
