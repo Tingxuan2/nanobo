@@ -21,6 +21,5 @@ dependencies = [
 ]
 
 [tool.setuptools.packages.find]
-where = ["."]
+where = ["src"]
 include = ["photon_opt*"]
-exclude = ["tests*"]
