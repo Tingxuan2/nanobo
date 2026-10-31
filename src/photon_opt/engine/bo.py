@@ -5,16 +5,20 @@ from pathlib import Path
 import torch
 from torch.quasirandom import SobolEngine
 
-from photon_opt.acquisition import make_acquisition
-from photon_opt.candidate_samplers import optimize_acquisition
+from photon_opt.acquisition import AcquisitionFactory, make_acquisition
+from photon_opt.candidate_samplers import CandidateOptimizer, optimize_acquisition
 from photon_opt.space import ParameterSpace
-from photon_opt.surrogates import GPSurrogate
+from photon_opt.surrogates import GPSurrogate, Surrogate
 from photon_opt.telemetry import Telemetry
 
 
 class BOEngine:
     """Batch Bayesian optimization with ask/tell. Physical units in and out.
 
+    Pluggable parts (defaults = GP, Log Expected Improvement, BoTorch optimizer):
+      surrogate    model fitted to the data, in [0, 1]^d
+      acquisition  (model, best score, q) -> acquisition function
+      optimizer    (acquisition function, dim, q) -> best q points in [0, 1]^d
     If checkpoint_path is given, every tell() saves all data to that CSV file,
     and an existing file is loaded on creation (resume).
     If telemetry is given, scores and GP diagnostics are logged to it.
@@ -27,11 +31,16 @@ class BOEngine:
         seed: int = 0,
         checkpoint_path: str | Path | None = None,
         telemetry: Telemetry | None = None,
+        surrogate: Surrogate | None = None,
+        acquisition: AcquisitionFactory = make_acquisition,
+        optimizer: CandidateOptimizer = optimize_acquisition,
     ) -> None:
         self.space = space
         self.n_init = n_init
         self._sobol = SobolEngine(space.dim, scramble=True, seed=seed)
-        self._surrogate = GPSurrogate()
+        self._surrogate: Surrogate = surrogate if surrogate is not None else GPSurrogate()
+        self._acquisition = acquisition
+        self._optimizer = optimizer
         self._telemetry = telemetry if telemetry is not None else Telemetry()
         self._x_unit = torch.empty(0, space.dim, dtype=torch.float64)
         self._y = torch.empty(0, dtype=torch.float64)
@@ -56,8 +65,8 @@ class BOEngine:
                 self._surrogate.last_mll,
                 self._surrogate.hyperparameters(self.space.names),
             )
-            acqf = make_acquisition(self._surrogate.model, best_f=self._y.max(), q=q)
-            u = optimize_acquisition(acqf, self.space.dim, q=q)
+            acqf = self._acquisition(self._surrogate.model, self._y.max(), q)
+            u = self._optimizer(acqf, self.space.dim, q)
         return self.space.from_unit(u)
 
     def tell(self, x: torch.Tensor, y: torch.Tensor) -> None:
