@@ -18,6 +18,7 @@ dependencies = [
     "gpytorch>=1.10",
     "pytest>=7.0.0",
     "tensorboard>=2.10.0",
+    "optuna",
 ]
 
 [tool.setuptools.packages.find]

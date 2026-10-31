@@ -10,6 +10,7 @@ class GPSurrogate:
 
     def __init__(self) -> None:
         self._model: SingleTaskGP | None = None
+        self.last_mll: float | None = None  # marginal log likelihood after the last fit
 
     @property
     def model(self) -> SingleTaskGP:
@@ -29,9 +30,33 @@ class GPSurrogate:
         model = SingleTaskGP(x_unit, y.unsqueeze(-1), outcome_transform=Standardize(m=1))
         mll = ExactMarginalLogLikelihood(model.likelihood, model)
         fit_gpytorch_mll(mll)
+        model.train()
+        with torch.no_grad():
+            self.last_mll = float(mll(model(*model.train_inputs), model.train_targets))
         model.eval()
         self._model = model
         return self
+
+    def hyperparameters(self, names: list[str]) -> dict[str, float]:
+        """Fitted GP hyperparameters, with one lengthscale per parameter name.
+
+        Note: noise and outputscale are in the standardized score units.
+        """
+        model = self.model
+        out: dict[str, float] = {"noise": model.likelihood.noise.mean().item()}
+        kernel = model.covar_module
+        if hasattr(kernel, "outputscale"):
+            out["outputscale"] = kernel.outputscale.item()
+            kernel = kernel.base_kernel
+        lengthscale = getattr(kernel, "lengthscale", None)
+        if lengthscale is not None:
+            values = lengthscale.detach().flatten().tolist()
+            if len(values) == 1:
+                out["lengthscale"] = values[0]
+            else:
+                for name, value in zip(names, values):
+                    out[f"lengthscale/{name}"] = value
+        return out
 
     @torch.no_grad()
     def predict(self, x_unit: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:

@@ -7,6 +7,8 @@ from photon_opt.space import ParameterSpace
 
 class Driver(ABC):
     """Contract: physical parameters (n, d) in, scores (n,) out. Higher is better."""
+    max_parallel: int = 1  # how many designs this driver can simulate at the same time
+    
 
     def __init__(self, space: ParameterSpace) -> None:
         self._space = space
